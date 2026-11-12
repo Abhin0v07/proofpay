@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofPay: pay only when the work is proven</title>
+<style>
+  :root{
+    --navy:#0b1f3a; --blue:#0070e0; --blue-d:#00459a; --ink:#17212f; --muted:#5b6b80;
+    --line:#e1e7f0; --bg:#f4f7fb; --card:#ffffff;
+    --ok:#12805c; --ok-bg:#dff5ea; --bad:#b42318; --bad-bg:#fde8e6; --warn:#8a5a00; --warn-bg:#fff1cc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue-d) 70%,var(--blue));color:#fff;padding:28px 16px 70px}
+  .wrap{max-width:1020px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:.2px}
+  .logo{width:34px;height:34px;border-radius:10px;background:#fff;color:var(--blue);display:grid;place-items:center;font-weight:900}
+  .tag{margin-left:auto;font-size:12px;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:999px}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.1;margin:30px 0 10px}
+  .lead{max-width:640px;color:#d6e4f7;font-size:17px;line-height:1.5;margin:0}
+  main{margin-top:-44px;padding:0 16px 40px}
+  .stepper{display:flex;gap:8px;list-style:none;padding:0;margin:0 0 16px}
+  .stepper li{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+  .stepper .n{width:24px;height:24px;border-radius:50%;background:#e8eef7;display:grid;place-items:center;font-weight:800;font-size:12px;flex:none}
+  .stepper li.active{border-color:var(--blue);color:var(--ink);box-shadow:0 0 0 3px rgba(0,112,224,.14)}
+  .stepper li.active .n{background:var(--blue);color:#fff}
+  .stepper li.done .n{background:var(--ok);color:#fff}
+  .stepper li.done{color:var(--ink)}
+  .stepper li.bad .n{background:var(--bad);color:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 6px 20px rgba(11,31,58,.05)}
+  .card.off{opacity:.5;pointer-events:none}
+  .card h2{margin:0 0 4px;font-size:18px}
+  .role{font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.6px}
+  .hint{color:var(--muted);font-size:14px;margin:0 0 6px}
+  label{display:block;font-weight:600;font-size:14px;margin:14px 0 6px}
+  textarea,input{width:100%;padding:11px 12px;border:1px solid #c9d3e1;border-radius:10px;font:inherit;background:#fff}
+  textarea{min-height:110px;resize:vertical}
+  textarea:focus,input:focus{outline:2px solid rgba(0,112,224,.35);border-color:var(--blue)}
+  .btn{display:inline-block;margin-top:14px;padding:11px 18px;border:0;border-radius:10px;background:var(--blue);color:#fff;font:inherit;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn:hover{background:var(--blue-d)}
+  .btn:disabled{background:#a9c3e6;cursor:wait}
+  .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-size:12px;padding:5px 10px;border-radius:999px;border:1px dashed #9bb3d1;background:#f7faff;color:#2b4a73;cursor:pointer}
+  .chip:hover{background:#eaf2ff}
+  .msg{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
+  .err{color:var(--bad)}
+  .hidden{display:none !important}
+  .vault{display:flex;align-items:center;gap:14px;background:var(--navy);color:#fff;border-radius:16px;padding:18px 20px;margin-bottom:16px}
+  .vault .lock{font-size:30px}
+  .vault .amt{font-size:28px;font-weight:800}
+  .vault .st{font-size:14px;color:#c9daf2}
+  .pill{margin-left:auto;font-size:13px;font-weight:800;padding:6px 12px;border-radius:999px;background:#e8eef7;color:#33475b}
+  .pill.awaiting_buyer_approval{background:var(--warn-bg);color:var(--warn)}
+  .pill.held{background:#dbe9ff;color:var(--blue-d)}
+  .pill.paid{background:var(--ok-bg);color:var(--ok)}
+  .pill.refunded{background:var(--bad-bg);color:var(--bad)}
+  #refCard{margin-top:16px}
+  .loading{display:flex;gap:12px;align-items:center;color:var(--muted)}
+  .spin{width:20px;height:20px;border:3px solid #cfe0f7;border-top-color:var(--blue);border-radius:50%;animation:s 0.9s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .banner{padding:14px 16px;border-radius:12px;font-weight:800;font-size:18px;margin-bottom:12px}
+  .banner.paid{background:var(--ok-bg);color:var(--ok)}
+  .banner.refunded{background:var(--bad-bg);color:var(--bad)}
+  .item{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .mark{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+  .mark.y{background:var(--ok)} .mark.n{background:var(--bad)}
+  .item b{display:block;font-size:14px}
+  .item span{font-size:14px;color:var(--muted)}
+  .meta{margin-top:12px;font-size:13px;color:var(--muted)}
+  .why{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+  .why div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px;color:var(--muted)}
+  .why b{display:block;color:var(--ink);margin-bottom:4px}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:0 16px 30px}
+  @media(max-width:760px){.grid,.why{grid-template-columns:1fr}.stepper{flex-direction:column}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><div class="logo">P</div>ProofPay<span class="tag">PayPal + AI escrow (sandbox)</span></div>
+    <h1>Pay only when the work is proven.</h1>
+    <p class="lead">The buyer's money is held by PayPal. An AI referee checks the delivery against the brief, then PayPal releases the payment or returns the hold. No chasing, no ghosting.</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <ol class="stepper" id="stepper">
+      <li data-step="1"><span class="n">1</span>Post the brief</li>
+      <li data-step="2"><span class="n">2</span>PayPal holds the money</li>
+      <li data-step="3"><span class="n">3</span>AI referee reviews</li>
+      <li data-step="4"><span class="n">4</span><span id="step4Label">Payment settled</span></li>
+    </ol>
+
+    <div class="vault">
+      <div class="lock" id="vaultIcon">&#128274;</div>
+      <div>
+        <div class="amt" id="vaultAmount">$0.00</div>
+        <div class="st" id="vaultNote">No funds yet. Create a job to begin.</div>
+      </div>
+      <div class="pill" id="status">no job yet</div>
+    </div>
+
+    <div class="grid">
+      <section class="card" id="buyerCard">
+        <div class="role">Buyer</div>
+        <h2>Post a job</h2>
+        <p class="hint">Describe what you need. Your payment is held, not sent.</p>
+        <label for="brief">What do you need done?</label>
+        <textarea id="brief">Design a simple logo for a coffee shop</textarea>
+        <label for="amount">Amount (USD)</label>
+        <input id="amount" type="number" step="0.01" min="1" value="25.00">
+        <button class="btn" id="createBtn" onclick="createJob()">Create job and hold payment</button>
+        <div class="msg" id="createMsg"></div>
+        <div id="approveBox" class="hidden">
+          <a class="btn" id="approveLink" target="_blank" rel="noopener">Approve payment on PayPal</a>
+          <div class="msg">Log in with the sandbox buyer account. This page updates by itself.</div>
+        </div>
+        <div class="msg" id="jobIdText"></div>
+      </section>
+
+      <section class="card off" id="sellerCard">
+        <div class="role">Seller</div>
+        <h2>Submit your delivery</h2>
+        <p class="hint">The AI referee reads this and compares it with the brief.</p>
+        <label for="delivery">Describe or paste your finished work</label>
+        <textarea id="delivery" placeholder="Here is the finished logo..."></textarea>
+        <div class="chips">
+          <span class="chip" onclick="fillSample('good')">Fill a good delivery</span>
+          <span class="chip" onclick="fillSample('bad')">Fill a bad delivery</span>
+        </div>
+        <button class="btn" id="deliverBtn" onclick="deliver()">Submit for AI review</button>
+        <div class="msg" id="deliverMsg"></div>
+      </section>
+    </div>
+
+    <section class="card hidden" id="refCard">
+      <div class="role">AI referee</div>
+      <h2>Decision</h2>
+      <div class="loading" id="refLoading"><div class="spin"></div><div>The referee is checking the delivery against the brief. This can take up to 40 seconds.</div></div>
+      <div id="refResult" class="hidden">
+        <div class="banner" id="banner"></div>
+        <p id="summary"></p>
+        <div id="items"></div>
+        <div class="meta" id="metaText"></div>
+        <button class="btn ghost" onclick="location.reload()">Start a new job</button>
+      </div>
+    </section>
+
+    <div class="why">
+      <div><b>For buyers</b>Money is never released for work that doesn't match the brief.</div>
+      <div><b>For sellers</b>Funds are already secured, so approved work is paid immediately.</div>
+      <div><b>For PayPal</b>More trust means more completed transactions and fewer disputes.</div>
+    </div>
+  </div>
+</main>
+<footer>Sandbox demo: no real money moves. Built with PayPal Orders (authorize, capture, void) and Gemini.</footer>
+
+<script>
+let jobId = null, pollTimer = null, jobAmount = "0.00";
+const $ = id => document.getElementById(id);
+
+const NOTES = {
+  no_job: "No funds yet. Create a job to begin.",
+  awaiting_buyer_approval: "Waiting for the buyer to approve the payment on PayPal.",
+  held: "Held by PayPal. Nothing is charged until the referee decides.",
+  paid: "Released to the seller. The hold was captured.",
+  refunded: "Returned to the buyer. The hold was voided."
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  let data;
+  try { data = await r.json(); } catch (e) { data = { detail: "Server error" }; }
+  if (!r.ok) throw new Error(data.detail || ("Error " + r.status));
+  return data;
+}
+
+function setStage(n, outcome) {
+  document.querySelectorAll("#stepper li").forEach(li => {
+    const s = Number(li.dataset.step);
+    li.classList.toggle("done", s < n);
+    li.classList.toggle("active", s === n);
+    li.classList.remove("bad");
+  });
+  if (n === 5) {
+    const l4 = document.querySelector('#stepper li[data-step="4"]');
+    l4.classList.add("done");
+    l4.classList.remove("active");
+    if (outcome === "refunded") { l4.classList.remove("done"); l4.classList.add("bad"); }
+    $("step4Label").textContent = outcome === "paid" ? "Released to seller" : "Refunded to buyer";
+  }
+}
+
+function setStatus(s) {
+  $("status").textContent = s.replace(/_/g, " ");
+  $("status").className = "pill " + s;
+  $("vaultNote").textContent = NOTES[s] || "";
+  $("vaultAmount").textContent = "$" + Number(jobAmount).toFixed(2);
+  $("vaultIcon").innerHTML = s === "paid" ? "&#9989;" : s === "refunded" ? "&#8617;" : "&#128274;";
+}
+
+function fillSample(kind) {
+  $("delivery").value = kind === "good"
+    ? "Here is the finished logo as a PNG. It is a coffee cup with steam in brown and cream, simple and flat."
+    : "I made a logo, it's a picture of a dog.";
+}
+
+async function createJob() {
+  const amount = parseFloat($("amount").value);
+  if (!$("brief").value.trim() || isNaN(amount) || amount <= 0) {
+    $("createMsg").className = "msg err";
+    $("createMsg").textContent = "Enter a brief and a valid amount.";
+    return;
+  }
+  $("createBtn").disabled = true;
+  $("createMsg").className = "msg";
+  $("createMsg").textContent = "Creating the order with PayPal...";
+  try {
+    const data = await api("/api/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brief: $("brief").value, amount: amount.toFixed(2) })
+    });
+    jobId = data.jobId;
+    jobAmount = amount.toFixed(2);
+    $("jobIdText").textContent = "Job " + jobId;
+    $("approveLink").href = data.approveUrl;
+    $("approveBox").classList.remove("hidden");
+    $("createMsg").textContent = "Job created. Approve the payment to put it on hold.";
+    setStatus("awaiting_buyer_approval");
+    setStage(2);
+    poll();
+  } catch (e) {
+    $("createMsg").className = "msg err";
+    $("createMsg").textContent = e.message;
+    $("createBtn").disabled = false;
+  }
+}
+
+function poll() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const job = await api("/api/jobs/" + jobId);
+      if (job.status === "held") {
+        clearInterval(pollTimer);
+        setStatus("held");
+        setStage(3);
+        $("createMsg").textContent = "$" + jobAmount + " is on hold at PayPal. Waiting for the seller.";
+        $("sellerCard").classList.remove("off");
+      }
+    } catch (e) { /* keep trying */ }
+  }, 2000);
+}
+
+async function deliver() {
+  if (!$("delivery").value.trim()) {
+    $("deliverMsg").className = "msg err";
+    $("deliverMsg").textContent = "Write the delivery first.";
+    return;
+  }
+  $("deliverBtn").disabled = true;
+  $("deliverMsg").className = "msg";
+  $("deliverMsg").textContent = "";
+  $("refCard").classList.remove("hidden");
+  $("refLoading").classList.remove("hidden");
+  $("refResult").classList.add("hidden");
+  $("refCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  try {
+    const data = await api("/api/jobs/" + jobId + "/deliver", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delivery: $("delivery").value })
+    });
+    showResult(data);
+  } catch (e) {
+    $("refCard").classList.add("hidden");
+    $("deliverMsg").className = "msg err";
+    $("deliverMsg").textContent = e.message + " (the money is still on hold, you can try again)";
+    $("deliverBtn").disabled = false;
+  }
+}
+
+function showResult(data) {
+  setStatus(data.status);
+  setStage(5, data.status);
+  $("sellerCard").classList.add("off");
+  $("refLoading").classList.add("hidden");
+  $("refResult").classList.remove("hidden");
+  const b = $("banner");
+  b.className = "banner " + data.status;
+  b.textContent = data.status === "paid"
+    ? "Approved: PayPal released the payment to the seller"
+    : "Rejected: PayPal released the hold back to the buyer";
+  const v = data.verdict || {};
+  $("summary").textContent = v.summary || "";
+  const box = $("items");
+  box.textContent = "";
+  (v.items || []).forEach(it => {
+    const row = document.createElement("div");
+    row.className = "item";
+    const mark = document.createElement("div");
+    mark.className = "mark " + (it.pass ? "y" : "n");
+    mark.textContent = it.pass ? "\u2713" : "\u2717";
+    const txt = document.createElement("div");
+    const t = document.createElement("b");
+    t.textContent = it.item || "";
+    const r = document.createElement("span");
+    r.textContent = it.reason || "";
+    txt.appendChild(t);
+    txt.appendChild(r);
+    row.appendChild(mark);
+    row.appendChild(txt);
+    box.appendChild(row);
+  });
+  $("metaText").textContent = (v.model ? "Judged by " + v.model + ". " : "") +
+    (data.status === "paid" ? "PayPal action: authorization captured." : "PayPal action: authorization voided, no money moved.");
+}
+
+setStage(1);
+setStatus("no job yet".replace(/ /g, "_"));
+$("status").textContent = "no job yet";
+$("vaultNote").textContent = NOTES.no_job;
+</script>
+</body>
+</html>
